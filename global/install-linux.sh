@@ -1,0 +1,147 @@
+#!/bin/bash
+set -euo pipefail
+
+# --- Fonctions utilitaires ---
+GREEN="\033[0;32m"
+RED="\033[0;31m"
+NC="\033[0m" # reset couleur
+
+ok()   { echo -e "${GREEN}[OK]${NC} $*"; }
+err()  { echo -e "${RED}[ERREUR]${NC} $*"; exit 1; }
+info() { echo "[INFO] $*"; }
+
+# Vérifie la présence d’une commande
+has() { command -v "$1" >/dev/null 2>&1; }
+
+# --- Mise à jour des paquets ---
+info "Mise à jour des paquets système..."
+sudo apt update && sudo apt upgrade -y || err "Échec mise à jour des paquets"
+
+# --- Git et GitHub Desktop ---
+if ! has git; then
+    info "Installation de Git..."
+    sudo apt install -y git || err "Échec installation Git"
+    ok "Git installé."
+else
+    ok "Git déjà présent."
+fi
+
+# GitHub Desktop n'est pas officiellement disponible pour Linux, mais on peut utiliser l'alternative "GitKraken" ou "GitHub CLI"
+if ! has gh; then
+    info "Installation de GitHub CLI..."
+    sudo apt install -y gh || err "Échec installation GitHub CLI"
+    ok "GitHub CLI installé."
+else
+    ok "GitHub CLI déjà présent."
+fi
+
+# --- VS Code ---
+if ! has code; then
+    info "Installation de VS Code..."
+    sudo apt install -y wget gpg
+    wget -qO- https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > packages.microsoft.gpg
+    sudo install -D -o root -g root -m 644 packages.microsoft.gpg /usr/share/keyrings/packages.microsoft.gpg
+    sudo sh -c 'echo "deb [arch=amd64,arm64,armhf signed-by=/usr/share/keyrings/packages.microsoft.gpg] https://packages.microsoft.com/repos/code stable main" > /etc/apt/sources.list.d/vscode.list'
+    rm -f packages.microsoft.gpg
+    sudo apt update
+    sudo apt install -y code || err "Échec installation VS Code"
+    ok "VS Code installé."
+    code --install-extension ms-vscode.cpptools || err "Échec installation extension C/C++"
+    ok "Extension C/C++ pour VS Code installée."
+else
+    ok "VS Code déjà présent."
+fi
+
+# --- GCC ---
+if ! has gcc; then
+    info "Installation de gcc..."
+    sudo apt install -y build-essential || err "Échec installation gcc"
+    ok "gcc installé."
+else
+    ok "gcc déjà présent ($(gcc --version | head -n1))."
+fi
+
+# --- Docker ---
+if ! has docker; then
+    info "Installation de Docker..."
+    sudo apt install -y apt-transport-https ca-certificates curl software-properties-common
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+    sudo apt update
+    sudo apt install -y docker-ce docker-ce-cli containerd.io || err "Échec installation Docker"
+    sudo usermod -aG docker $USER
+    ok "Docker installé. Redémarrez votre session pour appliquer les permissions."
+else
+    ok "Docker déjà présent."
+fi
+
+# Test rapide avec une image FrankenPHP
+if ! docker ps -a --format '{{.Names}}' | grep -q '^frankenphp-container$'; then
+    info "Test lancement conteneur FrankenPHP..."
+    docker run -d --name frankenphp-container -p 8080:80 -p 443:443 dunglas/frankenphp || err "Échec lancement conteneur FrankenPHP"
+    ok "Conteneur FrankenPHP démarré."
+    docker stop frankenphp-container >/dev/null
+    docker rm frankenphp-container >/dev/null
+    ok "Conteneur FrankenPHP arrêté et supprimé."
+else
+    ok "Conteneur FrankenPHP déjà créé (test sauté)."
+fi
+
+# --- PhpStorm ---
+if ! has phpstorm; then
+    info "Installation de PhpStorm via Snap..."
+    sudo snap install phpstorm --classic || err "Échec installation PhpStorm"
+    ok "PhpStorm installé."
+else
+    ok "PhpStorm déjà présent."
+fi
+
+# --- SDKMan ---
+if ! has sdk; then
+    info "Installation de SDKMan..."
+    curl -s "https://get.sdkman.io" | bash || err "Échec installation SDKMan"
+    source "$HOME/.sdkman/bin/sdkman-init.sh"
+    ok "SDKMan installé."
+else
+    ok "SDKMan déjà présent."
+fi
+
+# --- JDK ---
+if ! java -version >/dev/null 2>&1; then
+    info "Installation du JDK 21 (Temurin)..."
+    sdk install java 21.0.1-tem || err "Échec installation JDK"
+    ok "JDK 21 Temurin installé."
+else
+    ok "JDK déjà présent ($(java -version 2>&1 | head -n1))."
+fi
+
+# --- IntelliJ IDEA ---
+if ! has idea; then
+    info "Installation de IntelliJ IDEA Ultimate via Snap..."
+    sudo snap install intellij-idea-ultimate --classic || err "Échec installation IntelliJ IDEA"
+    ok "IntelliJ IDEA Ultimate installé."
+else
+    ok "IntelliJ IDEA déjà présent."
+fi
+
+# --- SceneBuilder for JavaFX ---
+if ! has scenebuilder; then
+    info "Installation de SceneBuilder..."
+    sudo apt install -y scenebuilder || err "Échec installation SceneBuilder"
+    ok "SceneBuilder installé."
+else
+    ok "SceneBuilder déjà présent."
+fi
+
+# --- Node.js ---
+if ! has node; then
+    info "Installation de Node.js..."
+    curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
+    sudo apt install -y nodejs || err "Échec installation Node.js"
+    ok "Node.js installé ($(node -v))."
+else
+    ok "Node.js déjà présent ($(node -v))."
+fi
+
+ok "✅ Installation terminée avec succès."
+exit 0
